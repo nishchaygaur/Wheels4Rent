@@ -59,14 +59,17 @@ export function App() {
   React.useEffect(() => {
     loadData();
 
-    // Check URL hash for Supabase auth email redirects
-    if (window.location.hash.includes('reset-password') || window.location.hash.includes('type=recovery')) {
+    // Check URL search and hash for Supabase auth email redirects
+    const hash = window.location.hash;
+    const search = window.location.search;
+
+    if (hash.includes('reset-password') || hash.includes('type=recovery') || search.includes('auth=recovery')) {
       setIsResetPasswordOpen(true);
-    } else if (window.location.hash.includes('email-confirmed') || window.location.hash.includes('type=signup')) {
+    } else if (hash.includes('email-confirmed') || hash.includes('type=signup') || search.includes('auth=signup')) {
       alert('Your email has been confirmed by Supabase! Welcome to Wheels4Rent.');
       setIsAuthModalOpen(true);
       setAuthInitialTab('signin');
-    } else if (window.location.hash.includes('magic-login') || window.location.hash.includes('type=magiclink')) {
+    } else if (hash.includes('magic-login') || hash.includes('type=magiclink') || search.includes('auth=magic')) {
       getCurrentUserProfile().then((u) => {
         if (u) setCurrentUser(u);
       });

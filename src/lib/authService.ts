@@ -66,7 +66,7 @@ export async function signUpUser(params: {
           dl_number: dlNumber,
           role: email.toLowerCase() === 'wheels4rent@cyberforage.space' ? 'admin' : 'customer',
         },
-        emailRedirectTo: `${window.location.origin}/#email-confirmed`,
+        emailRedirectTo: `${window.location.origin}/?auth=signup`,
       },
     });
 
@@ -185,7 +185,7 @@ export async function sendMagicLinkOrOtp(email: string): Promise<{ success: bool
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${window.location.origin}/#magic-login`,
+        emailRedirectTo: `${window.location.origin}/?auth=magic`,
       },
     });
 
@@ -353,7 +353,7 @@ export async function signOutUser(): Promise<void> {
 export async function requestPasswordReset(email: string): Promise<{ success: boolean; message: string }> {
   if (isSupabaseConfigured && supabase) {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/#reset-password`,
+      redirectTo: `${window.location.origin}/?auth=recovery`,
     });
 
     if (error) {
