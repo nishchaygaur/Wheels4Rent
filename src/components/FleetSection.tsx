@@ -57,10 +57,10 @@ export const FleetSection: React.FC<FleetSectionProps> = ({
         return matchesSearch && matchesCategory && matchesFuel && matchesTransmission;
       })
       .sort((a, b) => {
-        if (sortBy === 'price-asc') return a.daily_price - b.daily_price;
-        if (sortBy === 'price-desc') return b.daily_price - a.daily_price;
-        if (sortBy === 'rating') return b.rating - a.rating;
-        if (sortBy === 'stock') return b.available_quantity - a.available_quantity;
+        if (sortBy === 'price-asc') return Number(a.daily_price || 0) - Number(b.daily_price || 0);
+        if (sortBy === 'price-desc') return Number(b.daily_price || 0) - Number(a.daily_price || 0);
+        if (sortBy === 'rating') return Number(b.rating || 0) - Number(a.rating || 0);
+        if (sortBy === 'stock') return Number(b.available_quantity || 0) - Number(a.available_quantity || 0);
         return 0;
       });
   }, [cars, searchTerm, selectedCategory, selectedFuel, selectedTransmission, sortBy]);

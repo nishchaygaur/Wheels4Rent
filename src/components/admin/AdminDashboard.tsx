@@ -48,12 +48,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   }, [activeTab]);
 
   // Key Metrics
-  const totalRevenue = bookings.reduce((sum, b) => sum + (b.booking_status !== 'cancelled' ? b.total_amount : 0), 0);
+  const totalRevenue = bookings.reduce((sum, b) => sum + (b.booking_status !== 'cancelled' ? Number(b.total_amount || 0) : 0), 0);
   const totalBookings = bookings.length;
   const activeRentals = bookings.filter((b) => b.booking_status === 'active' || b.booking_status === 'confirmed').length;
-  const totalFleetUnits = cars.reduce((sum, c) => sum + c.quantity, 0);
-  const availableFleetUnits = cars.reduce((sum, c) => sum + c.available_quantity, 0);
-  const lowStockCount = cars.filter((c) => c.available_quantity <= 1).length;
+  const totalFleetUnits = cars.reduce((sum, c) => sum + Number(c.quantity || 0), 0);
+  const availableFleetUnits = cars.reduce((sum, c) => sum + Number(c.available_quantity || 0), 0);
+  const lowStockCount = cars.filter((c) => Number(c.available_quantity || 0) <= 1).length;
   const utilizationRate = totalFleetUnits > 0 ? Math.round(((totalFleetUnits - availableFleetUnits) / totalFleetUnits) * 100) : 0;
 
   // Chart Data 1: Category Distribution

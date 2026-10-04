@@ -47,7 +47,7 @@ export const CarDetailsModal: React.FC<CarDetailsModalProps> = ({ car, onClose, 
 
             <div className="text-right">
               <span className="text-3xl font-black text-white">
-                ₹{car.daily_price.toLocaleString('en-IN')}
+                ₹{Number(car.daily_price || 0).toLocaleString('en-IN')}
               </span>
               <span className="text-xs text-slate-400 block">per day (excl. GST)</span>
             </div>
@@ -80,7 +80,7 @@ export const CarDetailsModal: React.FC<CarDetailsModalProps> = ({ car, onClose, 
             <div className="bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800 text-center">
               <Star className="w-5 h-5 fill-amber-400 text-amber-400 mx-auto mb-1" />
               <p className="text-[11px] text-slate-400">User Rating</p>
-              <p className="text-xs font-bold text-white">{car.rating} ({car.reviews_count} reviews)</p>
+              <p className="text-xs font-bold text-white">{Number(car.rating || 0).toFixed(1)} ({car.reviews_count} reviews)</p>
             </div>
           </div>
 

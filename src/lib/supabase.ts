@@ -61,6 +61,39 @@ function initializeLocalStorage() {
 
 initializeLocalStorage();
 
+// Helper to guarantee numbers are strictly typed numbers (Postgres numeric/decimal returns strings)
+export function sanitizeCar(c: any): Car {
+  return {
+    ...c,
+    daily_price: Number(c.daily_price || 0),
+    rating: Number(c.rating || 4.8),
+    quantity: Number(c.quantity || 0),
+    available_quantity: Number(c.available_quantity ?? c.quantity ?? 0),
+    seats: Number(c.seats || 5),
+    model_year: Number(c.model_year || 2024),
+    reviews_count: Number(c.reviews_count || 0),
+    features: Array.isArray(c.features)
+      ? c.features
+      : (typeof c.features === 'string' ? JSON.parse(c.features || '[]') : []),
+    is_featured: Boolean(c.is_featured),
+  };
+}
+
+export function sanitizeBooking(b: any): Booking {
+  return {
+    ...b,
+    total_days: Number(b.total_days || 1),
+    daily_rate: Number(b.daily_rate || 0),
+    subtotal: Number(b.subtotal || 0),
+    tax_amount: Number(b.tax_amount || 0),
+    deposit_amount: Number(b.deposit_amount || 0),
+    total_amount: Number(b.total_amount || 0),
+    add_ons: Array.isArray(b.add_ons)
+      ? b.add_ons
+      : (typeof b.add_ons === 'string' ? JSON.parse(b.add_ons || '[]') : []),
+  };
+}
+
 // ==========================================
 // VEHICLES (CARS) DATA ACCESS
 // ==========================================
@@ -72,8 +105,9 @@ export async function fetchCars(): Promise<Car[]> {
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data) && data.length > 0) {
-        localStorage.setItem(STORAGE_KEYS.CARS, JSON.stringify(data));
-        return data;
+        const sanitized = data.map(sanitizeCar);
+        localStorage.setItem(STORAGE_KEYS.CARS, JSON.stringify(sanitized));
+        return sanitized;
       }
     }
   } catch (e) {
@@ -88,7 +122,7 @@ export async function fetchCars(): Promise<Car[]> {
         .select('*')
         .order('daily_price', { ascending: true });
       if (!error && data && data.length > 0) {
-        return data as Car[];
+        return (data as any[]).map(sanitizeCar);
       }
     } catch (err) {
       console.warn('Supabase fetchCars failed, falling back to local database:', err);
@@ -97,7 +131,7 @@ export async function fetchCars(): Promise<Car[]> {
 
   // 3. Fallback to local storage
   const stored = localStorage.getItem(STORAGE_KEYS.CARS);
-  return stored ? JSON.parse(stored) : INITIAL_CARS;
+  return stored ? JSON.parse(stored).map(sanitizeCar) : INITIAL_CARS.map(sanitizeCar);
 }
 
 export async function addCar(carData: Omit<Car, 'id'>): Promise<Car> {
@@ -264,8 +298,9 @@ export async function fetchBookings(): Promise<Booking[]> {
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data)) {
-        localStorage.setItem(STORAGE_KEYS.BOOKINGS, JSON.stringify(data));
-        return data;
+        const sanitized = data.map(sanitizeBooking);
+        localStorage.setItem(STORAGE_KEYS.BOOKINGS, JSON.stringify(sanitized));
+        return sanitized;
       }
     }
   } catch (e) {
@@ -280,7 +315,7 @@ export async function fetchBookings(): Promise<Booking[]> {
         .select('*')
         .order('created_at', { ascending: false });
       if (!error && data && data.length > 0) {
-        return data as Booking[];
+        return (data as any[]).map(sanitizeBooking);
       }
     } catch (err) {
       console.warn('Supabase fetchBookings failed, falling back to local:', err);
@@ -289,7 +324,7 @@ export async function fetchBookings(): Promise<Booking[]> {
 
   // 3. Local fallback
   const stored = localStorage.getItem(STORAGE_KEYS.BOOKINGS);
-  return stored ? JSON.parse(stored) : INITIAL_BOOKINGS;
+  return stored ? JSON.parse(stored).map(sanitizeBooking) : INITIAL_BOOKINGS.map(sanitizeBooking);
 }
 
 export async function fetchUserBookings(userEmailOrId: string): Promise<Booking[]> {

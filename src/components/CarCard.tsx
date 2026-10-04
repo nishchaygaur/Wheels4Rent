@@ -63,8 +63,8 @@ export const CarCard: React.FC<CarCardProps> = ({ car, onSelectCar, onBookCar })
         {/* Rating Floating Badge */}
         <div className="absolute bottom-3 right-3 flex items-center space-x-1 px-2 py-0.5 rounded-lg bg-slate-950/80 backdrop-blur-md border border-slate-700/60 text-white text-xs font-semibold">
           <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-          <span>{car.rating.toFixed(1)}</span>
-          <span className="text-slate-400 text-[10px]">({car.reviews_count})</span>
+          <span>{Number(car.rating || 0).toFixed(1)}</span>
+          <span className="text-slate-400 text-[10px]">({car.reviews_count || 0})</span>
         </div>
       </div>
 
@@ -113,7 +113,7 @@ export const CarCard: React.FC<CarCardProps> = ({ car, onSelectCar, onBookCar })
           <div className="pt-2 border-t border-slate-800/80 flex items-baseline justify-between mb-4">
             <div>
               <span className="text-2xl font-black text-white">
-                ₹{car.daily_price.toLocaleString('en-IN')}
+                ₹{Number(car.daily_price || 0).toLocaleString('en-IN')}
               </span>
               <span className="text-xs text-slate-400 font-medium"> / day</span>
             </div>

@@ -36,11 +36,43 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
+// Ensure PostgreSQL NUMERIC (OID 1700) is parsed as JavaScript Number
+pg.types.setTypeParser(1700, (val) => (val === null ? null : parseFloat(val)));
+
+function mapCar(c) {
+  if (!c) return c;
+  return {
+    ...c,
+    daily_price: Number(c.daily_price || 0),
+    rating: Number(c.rating || 4.8),
+    quantity: Number(c.quantity || 0),
+    available_quantity: Number(c.available_quantity ?? c.quantity ?? 0),
+    seats: Number(c.seats || 5),
+    model_year: Number(c.model_year || 2024),
+    reviews_count: Number(c.reviews_count || 0),
+    features: Array.isArray(c.features) ? c.features : (typeof c.features === 'string' ? JSON.parse(c.features || '[]') : []),
+  };
+}
+
+function mapBooking(b) {
+  if (!b) return b;
+  return {
+    ...b,
+    total_days: Number(b.total_days || 1),
+    daily_rate: Number(b.daily_rate || 0),
+    subtotal: Number(b.subtotal || 0),
+    tax_amount: Number(b.tax_amount || 0),
+    deposit_amount: Number(b.deposit_amount || 0),
+    total_amount: Number(b.total_amount || 0),
+    add_ons: Array.isArray(b.add_ons) ? b.add_ons : (typeof b.add_ons === 'string' ? JSON.parse(b.add_ons || '[]') : []),
+  };
+}
+
 // 1. CARS API
 app.get('/api/cars', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM public.cars ORDER BY daily_price ASC');
-    res.json(result.rows);
+    res.json(result.rows.map(mapCar));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -64,7 +96,7 @@ app.post('/api/cars', async (req, res) => {
       c.image_url, c.features || [], c.rating || 4.8, c.reviews_count || 0, c.plate_number, c.description, c.is_featured || false
     ];
     const result = await pool.query(query, values);
-    res.status(201).json(result.rows[0]);
+    res.status(201).json(mapCar(result.rows[0]));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -99,7 +131,7 @@ app.put('/api/cars/:id', async (req, res) => {
       c.seats, c.mileage, c.image_url, c.plate_number, c.description, id
     ];
     const result = await pool.query(query, values);
-    res.json(result.rows[0]);
+    res.json(mapCar(result.rows[0]));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -119,7 +151,7 @@ app.patch('/api/cars/:id/quantity', async (req, res) => {
       'UPDATE public.cars SET quantity = $1, available_quantity = $2 WHERE id = $3 RETURNING *',
       [newQty, newAvail, id]
     );
-    res.json(result.rows[0]);
+    res.json(mapCar(result.rows[0]));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -139,7 +171,7 @@ app.delete('/api/cars/:id', async (req, res) => {
 app.get('/api/bookings', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM public.bookings ORDER BY created_at DESC');
-    res.json(result.rows);
+    res.json(result.rows.map(mapBooking));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -174,7 +206,7 @@ app.post('/api/bookings', async (req, res) => {
     // Decrement available quantity in database
     await pool.query('SELECT public.decrement_car_quantity($1)', [b.car_id]);
 
-    res.status(201).json(result.rows[0]);
+    res.status(201).json(mapBooking(result.rows[0]));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -196,7 +228,7 @@ app.put('/api/bookings/:id/status', async (req, res) => {
       }
     }
 
-    res.json(result.rows[0]);
+    res.json(mapBooking(result.rows[0]));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
