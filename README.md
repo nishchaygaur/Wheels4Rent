@@ -67,10 +67,8 @@ npm run dev
 ```
 The server runs on `http://localhost:5173/`.
 
-### 2. Login Credentials
-You can sign in with your own credentials or use the designated Administrator account:
-- **Admin**: `wheels4rent@cyberforage.space` / `Suraj@5141`
-- **Customer**: `customer@example.com` / `customer123`
+### 2. Administrator Access
+Access the operations dashboard via the Admin portal link using your authorized administrator credentials.
 
 ---
 
