@@ -33,8 +33,10 @@ export const FleetSection: React.FC<FleetSectionProps> = ({
     { id: 'all', label: 'All Fleet' },
     { id: 'SUV', label: 'SUVs & Crossovers' },
     { id: 'Off-road', label: '4x4 Off-Road' },
+    { id: 'MPV', label: '7-Seater MPVs' },
     { id: 'Sedan', label: 'Executive Sedans' },
     { id: 'Luxury', label: 'Luxury & EVs' },
+    { id: 'Hatchback', label: 'Hatchbacks' },
   ];
 
   // Filtering logic

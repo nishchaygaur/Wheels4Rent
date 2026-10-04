@@ -150,10 +150,19 @@ export async function addCar(carData: Omit<Car, 'id'>): Promise<Car> {
     });
     if (res.ok) {
       const saved = await res.json();
-      return saved;
+      const sanitized = sanitizeCar(saved);
+      const cars = await fetchCars();
+      const updatedCars = [sanitized, ...cars.filter(c => c.id !== sanitized.id)];
+      localStorage.setItem(STORAGE_KEYS.CARS, JSON.stringify(updatedCars));
+      return sanitized;
+    } else {
+      const err = await res.json().catch(() => ({}));
+      if (err.error) throw new Error(err.error);
     }
-  } catch (e) {
-    // continue to fallback
+  } catch (e: any) {
+    if (e.message && !e.message.includes('fetch')) {
+      throw e;
+    }
   }
 
   // 2. Try Supabase Client
@@ -164,7 +173,12 @@ export async function addCar(carData: Omit<Car, 'id'>): Promise<Car> {
         .insert([newCar])
         .select()
         .single();
-      if (!error && data) return data as Car;
+      if (!error && data) {
+        const sanitized = sanitizeCar(data);
+        const cars = await fetchCars();
+        localStorage.setItem(STORAGE_KEYS.CARS, JSON.stringify([sanitized, ...cars]));
+        return sanitized;
+      }
     } catch (err) {
       console.warn('Supabase addCar failed, saving locally:', err);
     }
@@ -172,9 +186,10 @@ export async function addCar(carData: Omit<Car, 'id'>): Promise<Car> {
 
   // 3. Local fallback
   const cars = await fetchCars();
-  const updatedCars = [newCar, ...cars];
+  const sanitizedNew = sanitizeCar(newCar);
+  const updatedCars = [sanitizedNew, ...cars];
   localStorage.setItem(STORAGE_KEYS.CARS, JSON.stringify(updatedCars));
-  return newCar;
+  return sanitizedNew;
 }
 
 export async function updateCar(id: string, updates: Partial<Car>): Promise<Car> {
@@ -187,10 +202,19 @@ export async function updateCar(id: string, updates: Partial<Car>): Promise<Car>
     });
     if (res.ok) {
       const saved = await res.json();
-      return saved;
+      const sanitized = sanitizeCar(saved);
+      const cars = await fetchCars();
+      const updatedCars = cars.map(c => c.id === id ? sanitized : c);
+      localStorage.setItem(STORAGE_KEYS.CARS, JSON.stringify(updatedCars));
+      return sanitized;
+    } else {
+      const err = await res.json().catch(() => ({}));
+      if (err.error) throw new Error(err.error);
     }
-  } catch (e) {
-    // continue to fallback
+  } catch (e: any) {
+    if (e.message && !e.message.includes('fetch')) {
+      throw e;
+    }
   }
 
   // 2. Try Supabase Client
@@ -202,7 +226,12 @@ export async function updateCar(id: string, updates: Partial<Car>): Promise<Car>
         .eq('id', id)
         .select()
         .single();
-      if (!error && data) return data as Car;
+      if (!error && data) {
+        const sanitized = sanitizeCar(data);
+        const cars = await fetchCars();
+        localStorage.setItem(STORAGE_KEYS.CARS, JSON.stringify(cars.map(c => c.id === id ? sanitized : c)));
+        return sanitized;
+      }
     } catch (err) {
       console.warn('Supabase updateCar failed, saving locally:', err);
     }
@@ -264,6 +293,9 @@ export async function deleteCar(id: string): Promise<boolean> {
       method: 'DELETE',
     });
     if (res.ok) {
+      const cars = await fetchCars();
+      const filtered = cars.filter(c => c.id !== id);
+      localStorage.setItem(STORAGE_KEYS.CARS, JSON.stringify(filtered));
       return true;
     }
   } catch (e) {

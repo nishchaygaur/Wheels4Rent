@@ -1,5 +1,5 @@
-export type CarCategory = 'SUV' | 'Sedan' | 'Hatchback' | 'Off-road' | 'Luxury';
-export type FuelType = 'Petrol' | 'Diesel' | 'Electric' | 'CNG';
+export type CarCategory = 'SUV' | 'Sedan' | 'Hatchback' | 'Off-road' | 'Luxury' | 'MPV' | 'MUV' | 'Electric';
+export type FuelType = 'Petrol' | 'Diesel' | 'Electric' | 'CNG' | 'Hybrid';
 export type TransmissionType = 'Automatic' | 'Manual';
 
 export interface Car {
