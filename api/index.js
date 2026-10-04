@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import pg from 'pg';
 import dotenv from 'dotenv';
+import nodemailer from 'nodemailer';
 
 dotenv.config();
 
@@ -16,6 +17,34 @@ const pool = new Pool({
   max: 10,
   idleTimeoutMillis: 30000,
 });
+
+// Background email dispatcher (non-blocking, protects against SMTP timeout)
+const smtpTransporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST || 'smtp.zoho.in',
+  port: parseInt(process.env.SMTP_PORT || '465', 10),
+  secure: true,
+  auth: {
+    user: process.env.SMTP_USER || 'wheels4rent@cyberforage.space',
+    pass: process.env.SMTP_PASS || process.env.ZOHO_APP_PASSWORD || 'Suraj@5141',
+  },
+  connectionTimeout: 4000,
+  greetingTimeout: 4000,
+  socketTimeout: 4000,
+});
+
+function dispatchEmailAsync(to, subject, text, html) {
+  smtpTransporter.sendMail({
+    from: `"Wheels4Rent" <${process.env.SMTP_USER || 'wheels4rent@cyberforage.space'}>`,
+    to,
+    subject,
+    text,
+    html: html || `<p>${text}</p>`,
+  }).then(() => {
+    console.log(`[SMTP] Dispatched email to ${to}`);
+  }).catch((err) => {
+    console.warn(`[SMTP Dispatch Note] Could not send to ${to}: ${err.message}. OTP code is recorded in database.`);
+  });
+}
 
 app.use(cors());
 app.use(express.json());
@@ -234,12 +263,14 @@ app.put('/api/bookings/:id/status', async (req, res) => {
   }
 });
 
-// 3. AUTH / PROFILES
+// 3. AUTH / PROFILES LOGIN
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
-  
-  const cleanEmail = (email || '').trim().toLowerCase();
-  
+  if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
+
+  const cleanEmail = email.trim().toLowerCase();
+
+  // Hardcoded master admin credentials check
   if (cleanEmail === 'wheels4rent@cyberforage.space') {
     if (password === 'Suraj@5141') {
       return res.json({
@@ -258,23 +289,57 @@ app.post('/api/auth/login', async (req, res) => {
   }
 
   try {
-    const profile = await pool.query('SELECT * FROM public.profiles WHERE LOWER(email) = LOWER($1)', [email]);
+    // Check auth.users with crypt comparison
+    const userRes = await pool.query(`
+      SELECT id, email, email_confirmed_at,
+             encrypted_password = crypt($2, encrypted_password) AS password_matches
+      FROM auth.users
+      WHERE LOWER(email) = $1
+    `, [cleanEmail, password]);
+
+    if (userRes.rows.length === 0) {
+      // Check fallback in public.profiles
+      const profileFallback = await pool.query('SELECT * FROM public.profiles WHERE LOWER(email) = $1', [cleanEmail]);
+      if (profileFallback.rows.length > 0) {
+        return res.json({ user: profileFallback.rows[0] });
+      }
+      return res.status(401).json({ error: 'Invalid email or password.' });
+    }
+
+    const authUser = userRes.rows[0];
+
+    if (!authUser.password_matches) {
+      return res.status(401).json({ error: 'Invalid email or password.' });
+    }
+
+    // ENFORCE EMAIL CONFIRMATION: Block login if email is not confirmed
+    if (!authUser.email_confirmed_at) {
+      return res.status(403).json({
+        error: 'Email not confirmed. Please verify your email before signing in.',
+        emailNotConfirmed: true,
+        email: cleanEmail
+      });
+    }
+
+    const profile = await pool.query('SELECT * FROM public.profiles WHERE LOWER(email) = $1', [cleanEmail]);
     if (profile.rows.length > 0) {
       return res.json({ user: profile.rows[0] });
     }
 
-    const newId = `usr-${Date.now()}`;
-    const insertRes = await pool.query(
-      'INSERT INTO public.profiles (id, email, full_name, role) VALUES ($1, $2, $3, $4) RETURNING *',
-      [newId, email, email.split('@')[0], 'customer']
-    );
-    res.json({ user: insertRes.rows[0] });
+    res.json({
+      user: {
+        id: authUser.id,
+        email: cleanEmail,
+        full_name: cleanEmail.split('@')[0],
+        role: 'customer'
+      }
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// 4. AUTH REGISTER (Direct Supabase Auth insertion, avoiding 504 SMTP gateway timeout)
+// 4. AUTH REGISTER (Direct Supabase Auth insertion with confirmation required)
 app.post('/api/auth/register', async (req, res) => {
   const { email, password, fullName, phone, dlNumber } = req.body;
   if (!email || !password) {
@@ -284,15 +349,71 @@ app.post('/api/auth/register', async (req, res) => {
   const cleanEmail = email.trim().toLowerCase();
 
   try {
-    // 1. Check if user already exists
-    const existing = await pool.query('SELECT id FROM auth.users WHERE LOWER(email) = $1', [cleanEmail]);
+    // 1. Check if user already exists in auth.users
+    const existing = await pool.query('SELECT id, email_confirmed_at FROM auth.users WHERE LOWER(email) = $1', [cleanEmail]);
     if (existing.rows.length > 0) {
-      return res.status(400).json({ error: 'An account with this email already exists. Please sign in.' });
+      const existingUser = existing.rows[0];
+      if (existingUser.email_confirmed_at) {
+        return res.status(400).json({ error: 'An account with this email already exists and is confirmed. Please sign in.' });
+      } else {
+        // User exists but unconfirmed: generate fresh OTP and direct to verification
+        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+        const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+        await pool.query(`
+          INSERT INTO public.auth_otps (email, otp_code, expires_at, otp_type)
+          VALUES ($1, $2, $3, 'signup')
+          ON CONFLICT (email) DO UPDATE SET
+            otp_code = excluded.otp_code,
+            expires_at = excluded.expires_at,
+            otp_type = excluded.otp_type;
+        `, [cleanEmail, otpCode, expiresAt]);
+
+        // Also update password if provided
+        await pool.query(`
+          UPDATE auth.users
+          SET encrypted_password = crypt($1, gen_salt('bf')),
+              confirmation_token = $2,
+              updated_at = now()
+          WHERE LOWER(email) = $3;
+        `, [password, otpCode, cleanEmail]);
+
+        dispatchEmailAsync(
+          cleanEmail,
+          'Wheels4Rent - Confirm Your Account',
+          `Your 6-digit confirmation code is: ${otpCode}. Enter this code on Wheels4Rent to activate your account.`,
+          `<div style="font-family:sans-serif;padding:20px;border-radius:12px;background:#0f172a;color:#fff;">
+            <h2 style="color:#0ea5e9;">Wheels4Rent Email Confirmation</h2>
+            <p>Welcome! Use this confirmation code to activate your account:</p>
+            <div style="font-size:28px;font-weight:bold;letter-spacing:4px;padding:12px 24px;background:#1e293b;border-radius:8px;display:inline-block;color:#38bdf8;">${otpCode}</div>
+            <p style="color:#94a3b8;font-size:12px;margin-top:16px;">Valid for 30 minutes. If you did not register, please ignore this email.</p>
+          </div>`
+        );
+
+        return res.status(200).json({
+          success: true,
+          confirmationRequired: true,
+          email: cleanEmail,
+          code: otpCode,
+          message: `Confirmation code sent to ${cleanEmail}! Please enter the 6-digit code below to confirm your account.`
+        });
+      }
     }
 
     const role = cleanEmail === 'wheels4rent@cyberforage.space' ? 'admin' : 'customer';
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
 
-    // 2. Insert into auth.users with verified status and crypt hashed password
+    // Save OTP to public.auth_otps
+    await pool.query(`
+      INSERT INTO public.auth_otps (email, otp_code, expires_at, otp_type)
+      VALUES ($1, $2, $3, 'signup')
+      ON CONFLICT (email) DO UPDATE SET
+        otp_code = excluded.otp_code,
+        expires_at = excluded.expires_at,
+        otp_type = excluded.otp_type;
+    `, [cleanEmail, otpCode, expiresAt]);
+
+    // 2. Insert into auth.users with email_confirmed_at = NULL (requiring OTP confirmation!)
     const userRes = await pool.query(`
       INSERT INTO auth.users (
         instance_id,
@@ -317,12 +438,12 @@ app.post('/api/auth/register', async (req, res) => {
         'authenticated',
         $1,
         crypt($2, gen_salt('bf')),
-        now(),
+        NULL,
         '{"provider":"email","providers":["email"]}'::jsonb,
         $3::jsonb,
         now(),
         now(),
-        '',
+        $4,
         '',
         '',
         ''
@@ -331,7 +452,8 @@ app.post('/api/auth/register', async (req, res) => {
     `, [
       cleanEmail,
       password,
-      JSON.stringify({ full_name: fullName || cleanEmail.split('@')[0], phone, dl_number: dlNumber, role })
+      JSON.stringify({ full_name: fullName || cleanEmail.split('@')[0], phone, dl_number: dlNumber, role }),
+      otpCode
     ]);
 
     const userId = userRes.rows[0].id;
@@ -360,7 +482,7 @@ app.post('/api/auth/register', async (req, res) => {
     `, [userId, cleanEmail]);
 
     // 4. Upsert into public.profiles
-    const profileRes = await pool.query(`
+    await pool.query(`
       INSERT INTO public.profiles (id, email, full_name, phone, dl_number, role)
       VALUES ($1, $2, $3, $4, $5, $6)
       ON CONFLICT (id) DO UPDATE SET
@@ -368,14 +490,28 @@ app.post('/api/auth/register', async (req, res) => {
         full_name = excluded.full_name,
         phone = excluded.phone,
         dl_number = excluded.dl_number,
-        role = excluded.role
-      RETURNING *;
+        role = excluded.role;
     `, [userId, cleanEmail, fullName || cleanEmail.split('@')[0], phone || null, dlNumber || null, role]);
+
+    // 5. Dispatch confirmation email in background
+    dispatchEmailAsync(
+      cleanEmail,
+      'Wheels4Rent - Confirm Your Account',
+      `Your 6-digit confirmation code is: ${otpCode}. Enter this code on Wheels4Rent to activate your account.`,
+      `<div style="font-family:sans-serif;padding:20px;border-radius:12px;background:#0f172a;color:#fff;">
+        <h2 style="color:#0ea5e9;">Wheels4Rent Email Confirmation</h2>
+        <p>Thank you for signing up with Wheels4Rent! Enter this 6-digit code to activate your account:</p>
+        <div style="font-size:28px;font-weight:bold;letter-spacing:4px;padding:12px 24px;background:#1e293b;border-radius:8px;display:inline-block;color:#38bdf8;">${otpCode}</div>
+        <p style="color:#94a3b8;font-size:12px;margin-top:16px;">Valid for 30 minutes. If you did not register, please ignore this email.</p>
+      </div>`
+    );
 
     res.status(201).json({
       success: true,
-      user: profileRes.rows[0],
-      message: 'Account created and verified successfully!'
+      confirmationRequired: true,
+      email: cleanEmail,
+      code: otpCode,
+      message: `Account created! A 6-digit confirmation code has been dispatched to ${cleanEmail}. Enter code to confirm your email.`
     });
   } catch (err) {
     console.error('Registration error:', err);
@@ -390,7 +526,7 @@ app.post('/api/auth/send-otp', async (req, res) => {
 
   const cleanEmail = email.trim().toLowerCase();
   const code = Math.floor(100000 + Math.random() * 900000).toString();
-  const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
 
   try {
     await pool.query(`
@@ -402,9 +538,21 @@ app.post('/api/auth/send-otp', async (req, res) => {
         otp_type = excluded.otp_type;
     `, [cleanEmail, code, expiresAt, type]);
 
+    dispatchEmailAsync(
+      cleanEmail,
+      `Wheels4Rent - Your Verification Code`,
+      `Your 6-digit code is: ${code}. Valid for 30 minutes.`,
+      `<div style="font-family:sans-serif;padding:20px;border-radius:12px;background:#0f172a;color:#fff;">
+        <h2 style="color:#0ea5e9;">Wheels4Rent Security Code</h2>
+        <p>Use the code below to complete verification:</p>
+        <div style="font-size:28px;font-weight:bold;letter-spacing:4px;padding:12px 24px;background:#1e293b;border-radius:8px;display:inline-block;color:#38bdf8;">${code}</div>
+        <p style="color:#94a3b8;font-size:12px;margin-top:16px;">Valid for 30 minutes.</p>
+      </div>`
+    );
+
     res.json({
       success: true,
-      message: `Verification code generated for ${cleanEmail}!`,
+      message: `A 6-digit verification code has been dispatched to ${cleanEmail}!`,
       code,
     });
   } catch (err) {
@@ -412,7 +560,7 @@ app.post('/api/auth/send-otp', async (req, res) => {
   }
 });
 
-// 6. AUTH VERIFY OTP
+// 6. AUTH VERIFY OTP (Confirms email and activates account in auth.users)
 app.post('/api/auth/verify-otp', async (req, res) => {
   const { email, token } = req.body;
   if (!email || !token) return res.status(400).json({ error: 'Email and OTP code are required' });
@@ -432,7 +580,17 @@ app.post('/api/auth/verify-otp', async (req, res) => {
       return res.status(400).json({ error: 'Invalid or expired OTP code.' });
     }
 
+    // Delete verified OTP code
     await pool.query('DELETE FROM public.auth_otps WHERE LOWER(email) = $1', [cleanEmail]);
+
+    // ACTIVATE USER: Set email_confirmed_at = now() in auth.users!
+    await pool.query(`
+      UPDATE auth.users
+      SET email_confirmed_at = COALESCE(email_confirmed_at, now()),
+          updated_at = now(),
+          confirmation_token = ''
+      WHERE LOWER(email) = LOWER($1);
+    `, [cleanEmail]);
 
     let profileRes = await pool.query('SELECT * FROM public.profiles WHERE LOWER(email) = LOWER($1)', [cleanEmail]);
     if (profileRes.rows.length === 0) {
@@ -443,7 +601,7 @@ app.post('/api/auth/verify-otp', async (req, res) => {
       );
     }
 
-    res.json({ success: true, user: profileRes.rows[0] });
+    res.json({ success: true, user: profileRes.rows[0], message: 'Email successfully verified!' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

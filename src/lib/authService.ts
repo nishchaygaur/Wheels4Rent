@@ -57,7 +57,7 @@ export async function signUpUser(params: {
   const cleanEmail = email.trim().toLowerCase();
 
   try {
-    // 1. Register directly in Supabase PostgreSQL via backend API (bypasses 504 SMTP timeout)
+    // 1. Register directly in Supabase PostgreSQL via backend API
     const res = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -73,55 +73,58 @@ export async function signUpUser(params: {
     if (res.ok) {
       const data = await res.json();
       
-      // 2. Immediately establish live Supabase Auth session via signInUser (signInWithPassword)
-      // Since user was inserted with email_confirmed_at in auth.users, GoTrue verifies password in <100ms with NO email hang!
+      // Store pending verification email
+      localStorage.setItem(PENDING_OTP_EMAIL_KEY, cleanEmail);
+
+      // Temporarily store password in sessionStorage so verifySignupOtp can establish live Supabase session after OTP confirmation
       try {
-        const loggedInUser = await signInUser(cleanEmail, password);
-        return {
-          user: loggedInUser,
-          confirmationRequired: false,
-          message: 'Account created and verified successfully in Supabase! Welcome to Wheels4Rent.',
-        };
-      } catch (loginErr) {
-        localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(data.user));
-        return {
-          user: data.user,
-          confirmationRequired: false,
-          message: 'Account created successfully! Welcome to Wheels4Rent.',
-        };
+        sessionStorage.setItem('w4r_pending_reg_pass', password);
+      } catch (e) {
+        // non-fatal
       }
+
+      // DO NOT auto-login. Require 6-digit confirmation OTP!
+      return {
+        user: null,
+        confirmationRequired: true,
+        message: data.message || `Confirmation code dispatched to ${cleanEmail}! Enter the 6-digit OTP to confirm your email.`,
+      };
     } else {
       const errData = await res.json().catch(() => ({}));
       throw new Error(errData.error || 'Registration failed. Please check your details.');
     }
   } catch (err: any) {
-    if (err.message && err.message.includes('already exists')) {
+    if (err.message && (err.message.includes('already exists') || err.message.includes('Email not confirmed'))) {
       throw err;
     }
 
-    // Fallback if backend API is offline
-    console.warn('API registration unavailable, fallback simulation:', err.message);
-    const fallbackProfile: UserProfile = {
-      id: `usr-${Date.now()}`,
-      email: cleanEmail,
-      full_name: fullName,
-      phone,
-      dl_number: dlNumber,
-      role: cleanEmail === 'wheels4rent@cyberforage.space' ? 'admin' : 'customer',
-      created_at: new Date().toISOString(),
-    };
-    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(fallbackProfile));
-    return {
-      user: fallbackProfile,
-      confirmationRequired: false,
-      message: 'Account created successfully! Welcome to Wheels4Rent.',
-    };
+    console.warn('API registration error:', err.message);
+    throw err;
   }
 }
 
 // 2. CONFIRM SIGNUP VIA OTP
 export async function verifySignupOtp(email: string, token: string): Promise<UserProfile> {
-  return verifyEmailOtp(email, token);
+  const cleanEmail = email.trim().toLowerCase();
+  
+  // 1. Verify OTP code and activate account in auth.users
+  const user = await verifyEmailOtp(cleanEmail, token);
+
+  // 2. If password was saved during this signup session, establish live Supabase GoTrue session
+  try {
+    const cachedPassword = sessionStorage.getItem('w4r_pending_reg_pass');
+    if (cachedPassword && isSupabaseConfigured && supabase) {
+      await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password: cachedPassword,
+      });
+      sessionStorage.removeItem('w4r_pending_reg_pass');
+    }
+  } catch (e) {
+    console.warn('Supabase post-verification signin note:', e);
+  }
+
+  return user;
 }
 
 // 3. MAGIC LINK / EMAIL OTP SIGN IN
@@ -202,38 +205,77 @@ export async function verifyEmailOtp(email: string, token: string): Promise<User
 export async function signInUser(email: string, password: string): Promise<UserProfile> {
   const cleanEmail = email.trim().toLowerCase();
 
-  // If Supabase is configured, authenticate directly via Supabase Auth GoTrue
-  if (isSupabaseConfigured && supabase) {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: cleanEmail,
-      password,
+  // 1. Authenticate via backend API (checks password hash & email confirmation)
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: cleanEmail, password }),
     });
 
-    if (error) {
-      throw new Error(error.message);
+    if (res.status === 403) {
+      const data = await res.json().catch(() => ({}));
+      if (data.emailNotConfirmed) {
+        throw new Error('Email not confirmed. Please verify your email before signing in.');
+      }
     }
 
-    if (data.user) {
-      const { data: dbProfile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', data.user.id)
-        .single();
+    if (res.ok) {
+      const data = await res.json();
+      if (data.user) {
+        // Also sync live session with Supabase GoTrue if configured
+        if (isSupabaseConfigured && supabase) {
+          try {
+            await supabase.auth.signInWithPassword({ email: cleanEmail, password });
+          } catch (e) {
+            // non-fatal
+          }
+        }
+        localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(data.user));
+        return data.user;
+      }
+    } else {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Invalid email or password.');
+    }
+  } catch (apiErr: any) {
+    if (apiErr.message && (apiErr.message.includes('Email not confirmed') || apiErr.message.includes('Invalid') || apiErr.message.includes('Access denied'))) {
+      throw apiErr;
+    }
 
-      const profile: UserProfile = dbProfile || {
-        id: data.user.id,
-        email: data.user.email || cleanEmail,
-        full_name: data.user.user_metadata?.full_name || (cleanEmail === 'wheels4rent@cyberforage.space' ? 'Wheels4Rent Operations (Admin)' : 'Customer'),
-        phone: data.user.user_metadata?.phone,
-        dl_number: data.user.user_metadata?.dl_number,
-        role: data.user.user_metadata?.role || (
-          cleanEmail === 'wheels4rent@cyberforage.space' ? 'admin' : 'customer'
-        ),
-        created_at: data.user.created_at,
-      };
+    // Direct Supabase Auth fallback if backend is offline
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password,
+      });
 
-      localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(profile));
-      return profile;
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      if (data.user) {
+        const { data: dbProfile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', data.user.id)
+          .single();
+
+        const profile: UserProfile = dbProfile || {
+          id: data.user.id,
+          email: data.user.email || cleanEmail,
+          full_name: data.user.user_metadata?.full_name || (cleanEmail === 'wheels4rent@cyberforage.space' ? 'Wheels4Rent Operations (Admin)' : 'Customer'),
+          phone: data.user.user_metadata?.phone,
+          dl_number: data.user.user_metadata?.dl_number,
+          role: data.user.user_metadata?.role || (
+            cleanEmail === 'wheels4rent@cyberforage.space' ? 'admin' : 'customer'
+          ),
+          created_at: data.user.created_at,
+        };
+
+        localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(profile));
+        return profile;
+      }
     }
   }
 

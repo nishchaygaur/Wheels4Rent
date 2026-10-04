@@ -60,7 +60,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       onSuccess(user);
       onClose();
     } catch (err: any) {
-      setError(err.message || 'Login failed. Please check credentials.');
+      const msg = err.message || 'Login failed. Please check credentials.';
+      setError(msg);
+      if (msg.includes('Email not confirmed') || msg.includes('verify your email')) {
+        setSuccessMsg('Your account is registered but requires email confirmation. Please enter the 6-digit code sent to your email.');
+        setTab('verify_signup_otp');
+      }
     } finally {
       setLoading(false);
     }
@@ -525,16 +530,36 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <CheckCircle2 className="w-4 h-4" />
               </button>
 
-              <p className="text-center text-[11px] text-slate-400">
-                Didn't receive email? Check spam or{' '}
+              <div className="flex justify-between items-center text-[11px] text-slate-400 pt-1">
                 <button
                   type="button"
                   onClick={() => switchTab('signup')}
-                  className="text-brand-400 hover:underline"
+                  className="hover:text-white"
                 >
-                  re-enter details
+                  Change details
                 </button>
-              </p>
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={async () => {
+                    if (!email) return;
+                    setLoading(true);
+                    setError(null);
+                    try {
+                      const res = await sendMagicLinkOrOtp(email);
+                      setSuccessMsg(res.message);
+                    } catch (e: any) {
+                      setError(e.message || 'Could not resend code');
+                    } finally {
+                      setLoading(false);
+                    }
+                  }}
+                  className="text-brand-400 hover:underline flex items-center space-x-1"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  <span>Resend Confirmation Code</span>
+                </button>
+              </div>
             </form>
           )}
 
