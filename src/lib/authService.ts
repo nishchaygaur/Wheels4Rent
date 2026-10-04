@@ -256,7 +256,42 @@ export async function verifyEmailOtp(email: string, token: string): Promise<User
 export async function signInUser(email: string, password: string): Promise<UserProfile> {
   const cleanEmail = email.trim().toLowerCase();
 
-  // Primary Administrator Account Check - STRICT PASSWORD REQUIREMENT
+  // If Supabase is configured, authenticate directly via Supabase Auth GoTrue
+  if (isSupabaseConfigured && supabase) {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: cleanEmail,
+      password,
+    });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    if (data.user) {
+      const { data: dbProfile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', data.user.id)
+        .single();
+
+      const profile: UserProfile = dbProfile || {
+        id: data.user.id,
+        email: data.user.email || cleanEmail,
+        full_name: data.user.user_metadata?.full_name || (cleanEmail === 'wheels4rent@cyberforage.space' ? 'Wheels4Rent Operations (Admin)' : 'Customer'),
+        phone: data.user.user_metadata?.phone,
+        dl_number: data.user.user_metadata?.dl_number,
+        role: data.user.user_metadata?.role || (
+          cleanEmail === 'wheels4rent@cyberforage.space' ? 'admin' : 'customer'
+        ),
+        created_at: data.user.created_at,
+      };
+
+      localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(profile));
+      return profile;
+    }
+  }
+
+  // Offline / Local fallback
   if (cleanEmail === 'wheels4rent@cyberforage.space') {
     if (password === 'Suraj@5141') {
       const adminProfile: UserProfile = {
@@ -274,58 +309,6 @@ export async function signInUser(email: string, password: string): Promise<UserP
     }
   }
 
-  if (email === 'customer@example.com' && password === 'customer123') {
-    const demoProfile: UserProfile = {
-      id: 'user-demo-1',
-      email: 'customer@example.com',
-      full_name: 'Rahul Sharma',
-      phone: '+91 98765 43210',
-      dl_number: 'DL0420190082341',
-      role: 'customer',
-      created_at: new Date().toISOString(),
-    };
-    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(demoProfile));
-    return demoProfile;
-  }
-
-  if (isSupabaseConfigured && supabase) {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    if (data.user) {
-      const { data: dbProfile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', data.user.id)
-        .single();
-
-      const profile: UserProfile = dbProfile || {
-        id: data.user.id,
-        email: data.user.email || '',
-        full_name: data.user.user_metadata?.full_name || data.user.email?.split('@')[0] || 'User',
-        phone: data.user.user_metadata?.phone,
-        dl_number: data.user.user_metadata?.dl_number,
-        role: data.user.user_metadata?.role || (
-          data.user.email?.toLowerCase() === 'wheels4rent@cyberforage.space' ||
-          data.user.email?.includes('admin')
-            ? 'admin'
-            : 'customer'
-        ),
-        created_at: data.user.created_at,
-      };
-
-      localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(profile));
-      return profile;
-    }
-  }
-
-  // Local fallback: Customer login only (Admin requires password verified above)
   const localProfile: UserProfile = {
     id: `usr-${Date.now()}`,
     email,
