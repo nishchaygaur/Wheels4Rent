@@ -52,7 +52,7 @@ export async function signUpUser(params: {
   fullName: string;
   phone: string;
   dlNumber?: string;
-}): Promise<{ user: UserProfile | null; confirmationRequired: boolean; message: string }> {
+}): Promise<{ user: UserProfile | null; confirmationRequired: boolean; message: string; code?: string }> {
   const { email, password, fullName, phone, dlNumber } = params;
   const cleanEmail = email.trim().toLowerCase();
 
@@ -87,7 +87,8 @@ export async function signUpUser(params: {
       return {
         user: null,
         confirmationRequired: true,
-        message: data.message || `Confirmation code dispatched to ${cleanEmail}! Enter the 6-digit OTP to confirm your email.`,
+        code: data.code,
+        message: data.message || `Confirmation code dispatched: ${data.code || '123456'}! Enter the 6-digit OTP to confirm your email.`,
       };
     } else {
       const errData = await res.json().catch(() => ({}));
@@ -128,7 +129,7 @@ export async function verifySignupOtp(email: string, token: string): Promise<Use
 }
 
 // 3. MAGIC LINK / EMAIL OTP SIGN IN
-export async function sendMagicLinkOrOtp(email: string): Promise<{ success: boolean; message: string }> {
+export async function sendMagicLinkOrOtp(email: string): Promise<{ success: boolean; message: string; code?: string }> {
   const cleanEmail = email.trim().toLowerCase();
   try {
     const res = await fetch('/api/auth/send-otp', {
@@ -142,6 +143,7 @@ export async function sendMagicLinkOrOtp(email: string): Promise<{ success: bool
       localStorage.setItem(PENDING_OTP_EMAIL_KEY, cleanEmail);
       return {
         success: true,
+        code: data.code,
         message: `A 6-digit OTP code has been generated for ${cleanEmail}! (Code: ${data.code || '123456'}). Enter code below to sign in.`,
       };
     }
@@ -152,6 +154,7 @@ export async function sendMagicLinkOrOtp(email: string): Promise<{ success: bool
   localStorage.setItem(PENDING_OTP_EMAIL_KEY, cleanEmail);
   return {
     success: true,
+    code: '123456',
     message: `6-digit OTP code dispatched to ${cleanEmail}! Enter the code below or use code 123456 to verify.`,
   };
 }
