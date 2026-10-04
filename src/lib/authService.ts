@@ -16,12 +16,26 @@ export async function getCurrentUserProfile(): Promise<UserProfile | null> {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
-        const { data: profile } = await supabase
+        // Use .maybeSingle() to avoid HTTP 406 when record is missing
+        const { data: profile, error } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', session.user.id)
-          .single();
+          .maybeSingle();
+
         if (profile) return profile as UserProfile;
+
+        // If user profile is not found in database (e.g. stale/deleted user session),
+        // cleanly clear local session so it doesn't trigger 406 or 403 errors
+        if (!profile && !error) {
+          try {
+            await supabase.auth.signOut({ scope: 'local' });
+          } catch (e) {
+            // ignore
+          }
+          localStorage.removeItem(CURRENT_USER_KEY);
+          return null;
+        }
         
         return {
           id: session.user.id,
@@ -262,7 +276,7 @@ export async function signInUser(email: string, password: string): Promise<UserP
           .from('profiles')
           .select('*')
           .eq('id', data.user.id)
-          .single();
+          .maybeSingle();
 
         const profile: UserProfile = dbProfile || {
           id: data.user.id,
@@ -315,12 +329,29 @@ export async function signInUser(email: string, password: string): Promise<UserP
 export async function signOutUser(): Promise<void> {
   if (isSupabaseConfigured && supabase) {
     try {
-      await supabase.auth.signOut();
+      // Use local scope to prevent 403 Forbidden errors when session is expired or deleted on server
+      await supabase.auth.signOut({ scope: 'local' });
     } catch (e) {
-      console.warn('Signout error:', e);
+      console.warn('Signout note:', e);
     }
   }
   localStorage.removeItem(CURRENT_USER_KEY);
+  localStorage.removeItem(PENDING_OTP_EMAIL_KEY);
+  try {
+    sessionStorage.removeItem('w4r_pending_reg_pass');
+  } catch (e) {}
+
+  // Clean up any stale Supabase auth tokens in storage
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith('sb-') || key.includes('auth-token'))) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach(k => localStorage.removeItem(k));
+  } catch (e) {}
 }
 
 // 7. REQUEST PASSWORD RESET (SEND RESET LINK / OTP)

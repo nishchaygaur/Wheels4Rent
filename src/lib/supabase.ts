@@ -172,7 +172,7 @@ export async function addCar(carData: Omit<Car, 'id'>): Promise<Car> {
         .from('cars')
         .insert([newCar])
         .select()
-        .single();
+        .maybeSingle();
       if (!error && data) {
         const sanitized = sanitizeCar(data);
         const cars = await fetchCars();
@@ -225,7 +225,7 @@ export async function updateCar(id: string, updates: Partial<Car>): Promise<Car>
         .update(updates)
         .eq('id', id)
         .select()
-        .single();
+        .maybeSingle();
       if (!error && data) {
         const sanitized = sanitizeCar(data);
         const cars = await fetchCars();
@@ -395,7 +395,7 @@ export async function createBooking(bookingData: Omit<Booking, 'id' | 'created_a
         .from('bookings')
         .insert([newBooking])
         .select()
-        .single();
+        .maybeSingle();
       if (!error && data) {
         await supabase.rpc('decrement_car_quantity', { car_id_param: bookingData.car_id });
         return data as Booking;
@@ -445,7 +445,7 @@ export async function updateBookingStatus(id: string, status: Booking['booking_s
         .update({ booking_status: status })
         .eq('id', id)
         .select()
-        .single();
+        .maybeSingle();
       if (!error && data) return data as Booking;
     } catch (err) {
       console.warn('Supabase updateBookingStatus failed:', err);
