@@ -1,0 +1,15 @@
+-- Seed Data for Wheels4Rent Fleet
+insert into public.cars (id, name, brand, model_year, category, daily_price, quantity, available_quantity, fuel_type, transmission, seats, mileage, image_url, features, rating, reviews_count, plate_number, description, is_featured)
+values
+  ('car-1', 'Thar 4x4 Hard Top', 'Mahindra', 2024, 'Off-road', 5500, 4, 3, 'Diesel', 'Automatic', 4, '14 km/l', 'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&w=1200&q=80', array['4x4 Drivetrain', 'Touchscreen Infotainment', 'Convertible / Hardtop', 'Hill Descent Assist', 'Cruise Control'], 4.9, 84, 'DL 01 AX 4490', 'Iconic authentic 4x4 off-roader designed for rough terrain, highway comfort, and adventurous road trips.', true),
+  ('car-2', 'XUV 700 AX7 Luxury', 'Mahindra', 2024, 'SUV', 5000, 5, 4, 'Diesel', 'Automatic', 7, '15.5 km/l', 'https://images.unsplash.com/photo-1563720223185-11003d516935?auto=format&fit=crop&w=1200&q=80', array['Panoramic Skyroof', 'Level 2 ADAS', 'Dual 10.25 screens', 'Sony 12-Speaker 3D Audio', 'Ventilated Seats'], 4.8, 67, 'DL 04 CZ 8812', 'The pinnacle of luxury and tech in an SUV with generous 7-seater space and whisper-quiet suspension.', true),
+  ('car-3', 'Scorpio Classic S11', 'Mahindra', 2024, 'SUV', 6000, 3, 2, 'Diesel', 'Manual', 7, '15 km/l', 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?auto=format&fit=crop&w=1200&q=80', array['mHawk Turbo Engine', '9" Touchscreen', 'Captain Seats', 'Hydraulic Steering'], 4.7, 53, 'HR 26 DQ 7721', 'The legendary Scorpio Classic with raw power, commanding driving position, and rugged durability.', false),
+  ('car-4', 'Slavia 1.5 TSI Style', 'Skoda', 2024, 'Sedan', 4000, 4, 4, 'Petrol', 'Automatic', 5, '18.7 km/l', 'https://images.unsplash.com/photo-1617814076367-b759c7d7e738?auto=format&fit=crop&w=1200&q=80', array['150 HP Turbo TSI', 'Electric Sunroof', 'Ventilated Leather Seats', '521L Boot Space'], 4.9, 42, 'UP 16 BE 3319', 'German precision meets executive luxury with phenomenal acceleration and 5-Star safety rating.', true),
+  ('car-5', 'Venue SX (O) Turbo', 'Hyundai', 2024, 'SUV', 3500, 6, 5, 'Petrol', 'Automatic', 5, '18 km/l', 'https://images.unsplash.com/photo-1605559424843-9e4c228bf1c2?auto=format&fit=crop&w=1200&q=80', array['Connected Bluelink Car Tech', 'Air Purifier', 'Drive Modes', 'Smart Sunroof'], 4.6, 38, 'DL 08 BK 9021', 'Agile compact SUV ideally suited for navigating city traffic while offering punchy turbo power.', false),
+  ('car-6', 'Fortuner Legender 4x4', 'Toyota', 2024, 'Luxury', 8500, 2, 2, 'Diesel', 'Automatic', 7, '13.5 km/l', 'https://images.unsplash.com/photo-1594502184342-2e12f877aa73?auto=format&fit=crop&w=1200&q=80', array['500 Nm Torque 4x4', 'Dual Tone Roof', 'Wireless Qi Charging', 'JBL Sound System'], 5.0, 91, 'HR 26 EX 0001', 'The undisputed king of full-size SUVs with peerless road status and indestructible reliability.', true)
+on conflict (id) do nothing;
+
+-- Ensure administrator user gets admin role
+update public.profiles
+set role = 'admin'
+where email = 'wheels4rent@cyberforage.space';
