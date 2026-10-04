@@ -66,7 +66,7 @@ export async function signUpUser(params: {
   fullName: string;
   phone: string;
   dlNumber?: string;
-}): Promise<{ user: UserProfile | null; confirmationRequired: boolean; message: string; code?: string }> {
+}): Promise<{ user: UserProfile | null; confirmationRequired: boolean; message: string }> {
   const { email, password, fullName, phone, dlNumber } = params;
   const cleanEmail = email.trim().toLowerCase();
 
@@ -101,8 +101,7 @@ export async function signUpUser(params: {
       return {
         user: null,
         confirmationRequired: true,
-        code: data.code,
-        message: data.message || `Confirmation code dispatched: ${data.code || '123456'}! Enter the 6-digit OTP to confirm your email.`,
+        message: data.message || `Account created! A 6-digit confirmation code has been sent to ${cleanEmail}. Please check your inbox.`,
       };
     } else {
       const errData = await res.json().catch(() => ({}));
@@ -143,7 +142,7 @@ export async function verifySignupOtp(email: string, token: string): Promise<Use
 }
 
 // 3. MAGIC LINK / EMAIL OTP SIGN IN
-export async function sendMagicLinkOrOtp(email: string): Promise<{ success: boolean; message: string; code?: string }> {
+export async function sendMagicLinkOrOtp(email: string): Promise<{ success: boolean; message: string }> {
   const cleanEmail = email.trim().toLowerCase();
   try {
     const res = await fetch('/api/auth/send-otp', {
@@ -157,8 +156,7 @@ export async function sendMagicLinkOrOtp(email: string): Promise<{ success: bool
       localStorage.setItem(PENDING_OTP_EMAIL_KEY, cleanEmail);
       return {
         success: true,
-        code: data.code,
-        message: `A 6-digit OTP code has been generated for ${cleanEmail}! (Code: ${data.code || '123456'}). Enter code below to sign in.`,
+        message: data.message || `A 6-digit verification code has been dispatched to ${cleanEmail}. Please check your inbox.`,
       };
     }
   } catch (e) {
@@ -168,8 +166,7 @@ export async function sendMagicLinkOrOtp(email: string): Promise<{ success: bool
   localStorage.setItem(PENDING_OTP_EMAIL_KEY, cleanEmail);
   return {
     success: true,
-    code: '123456',
-    message: `6-digit OTP code dispatched to ${cleanEmail}! Enter the code below or use code 123456 to verify.`,
+    message: `A 6-digit verification code has been dispatched to ${cleanEmail}. Please check your inbox.`,
   };
 }
 
@@ -369,7 +366,7 @@ export async function requestPasswordReset(email: string): Promise<{ success: bo
       localStorage.setItem(PENDING_OTP_EMAIL_KEY, cleanEmail);
       return {
         success: true,
-        message: `Password recovery code generated for ${cleanEmail}! (Code: ${data.code || '123456'}). Enter code below to set a new password.`,
+        message: `A 6-digit password recovery code has been sent to ${cleanEmail}. Please check your inbox.`,
       };
     }
   } catch (e) {
@@ -379,7 +376,7 @@ export async function requestPasswordReset(email: string): Promise<{ success: bo
   localStorage.setItem(PENDING_OTP_EMAIL_KEY, cleanEmail);
   return {
     success: true,
-    message: `Password reset recovery code sent to ${cleanEmail}! Enter your code below or use 123456 to set a new password.`,
+    message: `A 6-digit password recovery code has been sent to ${cleanEmail}. Please check your inbox.`,
   };
 }
 

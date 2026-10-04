@@ -393,8 +393,7 @@ app.post('/api/auth/register', async (req, res) => {
           success: true,
           confirmationRequired: true,
           email: cleanEmail,
-          code: otpCode,
-          message: `Your 6-digit confirmation code is: ${otpCode}. Please enter it below to confirm your account.`
+          message: `Account already created! A 6-digit confirmation code has been sent to ${cleanEmail}. Please enter it below to confirm your account.`
         });
       }
     }
@@ -510,8 +509,7 @@ app.post('/api/auth/register', async (req, res) => {
       success: true,
       confirmationRequired: true,
       email: cleanEmail,
-      code: otpCode,
-      message: `Account created! Your 6-digit confirmation code is: ${otpCode}. Enter code below to confirm your email.`
+      message: `Account created! A 6-digit confirmation code has been sent to ${cleanEmail}. Enter the code below to confirm your email.`
     });
   } catch (err) {
     console.error('Registration error:', err);
@@ -552,8 +550,7 @@ app.post('/api/auth/send-otp', async (req, res) => {
 
     res.json({
       success: true,
-      message: `A 6-digit verification code has been dispatched for ${cleanEmail}! (Code: ${code})`,
-      code,
+      message: `A 6-digit verification code has been dispatched to ${cleanEmail}. Please check your inbox.`,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

@@ -41,7 +41,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [dlNumber, setDlNumber] = React.useState('');
   const [otpCode, setOtpCode] = React.useState('');
   const [otpSent, setOtpSent] = React.useState(false);
-  const [generatedOtp, setGeneratedOtp] = React.useState<string | null>(null);
 
   // Reset errors when tab changes
   const switchTab = (newTab: AuthTab) => {
@@ -88,10 +87,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       });
 
       if (result.confirmationRequired) {
-        if (result.code) {
-          setGeneratedOtp(result.code);
-          setOtpCode(result.code);
-        }
+        setOtpCode('');
         setSuccessMsg(result.message);
         setTab('verify_signup_otp');
       } else if (result.user) {
@@ -132,10 +128,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setLoading(true);
     try {
       const res = await sendMagicLinkOrOtp(email);
-      if (res.code) {
-        setGeneratedOtp(res.code);
-        setOtpCode(res.code);
-      }
+      setOtpCode('');
       setSuccessMsg(res.message);
       setOtpSent(true);
     } catch (err: any) {
@@ -369,24 +362,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     </p>
                   </div>
 
-                  {generatedOtp && (
-                    <div className="p-3 rounded-2xl bg-brand-500/10 border border-brand-500/20 text-xs text-slate-300">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] text-slate-400 font-medium">Your 6-Digit Code:</span>
-                        <button
-                          type="button"
-                          onClick={() => setOtpCode(generatedOtp)}
-                          className="font-mono text-sm font-black tracking-widest text-brand-400 bg-slate-950 px-2.5 py-1 rounded-lg border border-brand-500/30 hover:border-brand-400 transition"
-                          title="Click to paste code"
-                        >
-                          {generatedOtp}
-                        </button>
-                      </div>
-                      <p className="text-[10px] text-slate-400 mt-1">
-                        Auto-filled below. Click "Verify OTP & Log In" or use code <strong className="text-slate-200">123456</strong>.
-                      </p>
-                    </div>
-                  )}
+
 
                   <div>
                     <label className="text-[11px] font-semibold text-slate-400 block mb-1">6-Digit Verification Code</label>
@@ -534,24 +510,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </p>
               </div>
 
-              {generatedOtp && (
-                <div className="p-3 rounded-2xl bg-brand-500/10 border border-brand-500/20 text-xs text-slate-300">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-slate-400 font-medium">Your 6-Digit Code:</span>
-                    <button
-                      type="button"
-                      onClick={() => setOtpCode(generatedOtp)}
-                      className="font-mono text-sm font-black tracking-widest text-brand-400 bg-slate-950 px-2.5 py-1 rounded-lg border border-brand-500/30 hover:border-brand-400 transition"
-                      title="Click to paste code"
-                    >
-                      {generatedOtp}
-                    </button>
-                  </div>
-                  <p className="text-[10px] text-slate-400 mt-1">
-                    Auto-filled in the box below. Click "Confirm Account & Proceed" or use master backup <strong className="text-slate-200">123456</strong>.
-                  </p>
-                </div>
-              )}
+
 
               <div>
                 <label className="text-[11px] font-semibold text-slate-400 block mb-1">
@@ -594,10 +553,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     setError(null);
                     try {
                       const res = await sendMagicLinkOrOtp(email);
-                      if (res.code) {
-                        setGeneratedOtp(res.code);
-                        setOtpCode(res.code);
-                      }
                       setSuccessMsg(res.message);
                     } catch (e: any) {
                       setError(e.message || 'Could not resend code');
