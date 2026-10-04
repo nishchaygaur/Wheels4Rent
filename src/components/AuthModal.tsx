@@ -165,20 +165,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  // Quick Demo Shortcut
-  const handleQuickDemoLogin = async (role: 'admin' | 'customer') => {
+  // Quick Customer Demo Shortcut
+  const handleQuickCustomerLogin = async () => {
     setError(null);
     setLoading(true);
     try {
-      if (role === 'admin') {
-        const user = await signInUser('wheels4rent@cyberforage.space', 'Suraj@5141');
-        onSuccess(user);
-        onClose();
-      } else {
-        const user = await signInUser('customer@example.com', 'customer123');
-        onSuccess(user);
-        onClose();
-      }
+      const user = await signInUser('customer@example.com', 'customer123');
+      onSuccess(user);
+      onClose();
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -612,30 +606,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
           {/* Quick Demo Credentials Footer */}
           <div className="pt-4 border-t border-slate-800">
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider text-center mb-2.5">
-              Instant 1-Click Login
-            </p>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="flex items-center justify-between">
               <button
                 type="button"
-                onClick={() => handleQuickDemoLogin('admin')}
-                className="py-2 px-3 rounded-xl bg-slate-950 hover:bg-slate-800 border border-brand-500/30 text-brand-400 text-xs font-bold transition flex items-center justify-center space-x-1.5"
-              >
-                <Shield className="w-3.5 h-3.5" />
-                <span>Admin Login</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickDemoLogin('customer')}
-                className="py-2 px-3 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-700 text-slate-300 text-xs font-bold transition flex items-center justify-center space-x-1.5"
+                onClick={handleQuickCustomerLogin}
+                className="w-full py-2 px-3 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-700 text-slate-300 text-xs font-bold transition flex items-center justify-center space-x-1.5"
               >
                 <User className="w-3.5 h-3.5" />
-                <span>Customer Login</span>
+                <span>Test Customer 1-Click Login</span>
               </button>
             </div>
-            <p className="text-[10px] text-slate-500 text-center mt-2">
-              Admin: <span className="text-slate-300 font-mono">wheels4rent@cyberforage.space</span>
+            <p className="text-[10px] text-slate-500 text-center mt-2.5">
+              Admin Portal access requires password authentication for <span className="text-slate-300 font-mono">wheels4rent@cyberforage.space</span>
             </p>
           </div>
 

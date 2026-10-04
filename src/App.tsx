@@ -15,6 +15,7 @@ import { EmailPreviewModal } from './components/EmailPreviewModal';
 import { AuthModal } from './components/AuthModal';
 import { ResetPasswordModal } from './components/ResetPasswordModal';
 import { AdminDashboard } from './components/admin/AdminDashboard';
+import { AdminLoginModal } from './components/AdminLoginModal';
 
 export function App() {
   const [cars, setCars] = React.useState<Car[]>([]);
@@ -24,6 +25,7 @@ export function App() {
 
   // Modal & View States
   const [isAdminView, setIsAdminView] = React.useState(false);
+  const [isAdminLoginOpen, setIsAdminLoginOpen] = React.useState(false);
   const [selectedCarForDetails, setSelectedCarForDetails] = React.useState<Car | null>(null);
   const [selectedCarForBooking, setSelectedCarForBooking] = React.useState<Car | null>(null);
   const [selectedBookingForEmail, setSelectedBookingForEmail] = React.useState<Booking | null>(null);
@@ -96,6 +98,18 @@ export function App() {
     setHeroCategoryFilter(filters.category);
   };
 
+  const handleOpenAdmin = () => {
+    if (
+      currentUser && 
+      currentUser.role === 'admin' && 
+      currentUser.email.toLowerCase() === 'wheels4rent@cyberforage.space'
+    ) {
+      setIsAdminView(true);
+    } else {
+      setIsAdminLoginOpen(true);
+    }
+  };
+
   const handleBookingSuccess = (newBooking: Booking) => {
     setBookings((prev) => [newBooking, ...prev]);
     // Refresh cars to update stock counts
@@ -138,7 +152,7 @@ export function App() {
             setIsMyBookingsOpen(true);
           }
         }}
-        onOpenAdmin={() => setIsAdminView(true)}
+        onOpenAdmin={handleOpenAdmin}
         onOpenResetPassword={() => setIsResetPasswordOpen(true)}
         onOpenEmailCenter={() => {
           if (bookings.length > 0) {
@@ -148,7 +162,13 @@ export function App() {
           }
         }}
         isAdminView={isAdminView}
-        onToggleAdminView={setIsAdminView}
+        onToggleAdminView={(target) => {
+          if (target) {
+            handleOpenAdmin();
+          } else {
+            setIsAdminView(false);
+          }
+        }}
         supabaseConnected={isSupabaseConfigured}
       />
 
@@ -157,6 +177,11 @@ export function App() {
         <AdminDashboard
           cars={cars}
           bookings={bookings}
+          currentUser={currentUser}
+          onAdminLoginSuccess={(adminUser) => {
+            setCurrentUser(adminUser);
+            setIsAdminView(true);
+          }}
           onRefreshData={loadData}
           onOpenEmailPreview={(booking) => setSelectedBookingForEmail(booking)}
           onCloseAdmin={() => setIsAdminView(false)}
@@ -183,7 +208,7 @@ export function App() {
       )}
 
       {/* Footer */}
-      <Footer onOpenAdmin={() => setIsAdminView(true)} />
+      <Footer onOpenAdmin={handleOpenAdmin} />
 
       {/* MODALS */}
 
@@ -242,6 +267,16 @@ export function App() {
       <ResetPasswordModal
         isOpen={isResetPasswordOpen}
         onClose={() => setIsResetPasswordOpen(false)}
+      />
+
+      {/* 7. Dedicated Admin Password Verification Modal */}
+      <AdminLoginModal
+        isOpen={isAdminLoginOpen}
+        onClose={() => setIsAdminLoginOpen(false)}
+        onSuccess={(adminUser) => {
+          setCurrentUser(adminUser);
+          setIsAdminView(true);
+        }}
       />
 
     </div>

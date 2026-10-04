@@ -238,21 +238,23 @@ app.put('/api/bookings/:id/status', async (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
   
-  // Designated administrator check
-  if (
-    (email.toLowerCase() === 'wheels4rent@cyberforage.space' && password === 'Suraj@5141') ||
-    (email === 'admin@wheels4rent.com' && password === 'admin123')
-  ) {
-    return res.json({
-      user: {
-        id: 'admin-001',
-        email: 'wheels4rent@cyberforage.space',
-        full_name: 'Wheels4Rent Operations (Admin)',
-        phone: '+91 97589 25637',
-        role: 'admin',
-        created_at: new Date().toISOString(),
-      }
-    });
+  const cleanEmail = (email || '').trim().toLowerCase();
+  
+  if (cleanEmail === 'wheels4rent@cyberforage.space') {
+    if (password === 'Suraj@5141') {
+      return res.json({
+        user: {
+          id: 'admin-001',
+          email: 'wheels4rent@cyberforage.space',
+          full_name: 'Wheels4Rent Operations (Admin)',
+          phone: '+91 97589 25637',
+          role: 'admin',
+          created_at: new Date().toISOString(),
+        }
+      });
+    } else {
+      return res.status(401).json({ error: 'Invalid administrator password. Access denied.' });
+    }
   }
 
   try {

@@ -254,21 +254,24 @@ export async function verifyEmailOtp(email: string, token: string): Promise<User
 
 // 5. STANDARD SIGN IN WITH PASSWORD
 export async function signInUser(email: string, password: string): Promise<UserProfile> {
-  // Primary Administrator Account Check
-  if (
-    (email.toLowerCase() === 'wheels4rent@cyberforage.space' && password === 'Suraj@5141') ||
-    (email === 'admin@wheels4rent.com' && password === 'admin123')
-  ) {
-    const adminProfile: UserProfile = {
-      id: 'admin-001',
-      email: 'wheels4rent@cyberforage.space',
-      full_name: 'Wheels4Rent Operations (Admin)',
-      phone: '+91 97589 25637',
-      role: 'admin',
-      created_at: new Date().toISOString(),
-    };
-    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(adminProfile));
-    return adminProfile;
+  const cleanEmail = email.trim().toLowerCase();
+
+  // Primary Administrator Account Check - STRICT PASSWORD REQUIREMENT
+  if (cleanEmail === 'wheels4rent@cyberforage.space') {
+    if (password === 'Suraj@5141') {
+      const adminProfile: UserProfile = {
+        id: 'admin-001',
+        email: 'wheels4rent@cyberforage.space',
+        full_name: 'Wheels4Rent Operations (Admin)',
+        phone: '+91 97589 25637',
+        role: 'admin',
+        created_at: new Date().toISOString(),
+      };
+      localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(adminProfile));
+      return adminProfile;
+    } else {
+      throw new Error('Invalid administrator password. Access denied.');
+    }
   }
 
   if (email === 'customer@example.com' && password === 'customer123') {
@@ -322,13 +325,12 @@ export async function signInUser(email: string, password: string): Promise<UserP
     }
   }
 
-  // Local fallback: Check if user exists or simulate customer
-  const isAdmin = email.toLowerCase() === 'wheels4rent@cyberforage.space' || email.toLowerCase().includes('admin');
+  // Local fallback: Customer login only (Admin requires password verified above)
   const localProfile: UserProfile = {
-    id: isAdmin ? 'admin-001' : `usr-${Date.now()}`,
+    id: `usr-${Date.now()}`,
     email,
-    full_name: isAdmin ? 'Wheels4Rent Operations (Admin)' : email.split('@')[0],
-    role: isAdmin ? 'admin' : 'customer',
+    full_name: email.split('@')[0],
+    role: 'customer',
     created_at: new Date().toISOString(),
   };
   localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(localProfile));

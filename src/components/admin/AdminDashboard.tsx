@@ -1,10 +1,11 @@
 import React from 'react';
-import { Car, Booking, CarCategory, FuelType, TransmissionType } from '../../types';
+import { Car, Booking, CarCategory, FuelType, TransmissionType, UserProfile } from '../../types';
 import { 
   addCar, updateCar, deleteCar, updateCarQuantity, updateBookingStatus 
 } from '../../lib/supabase';
 import { downloadInvoicePDF, printInvoicePDF } from '../../lib/invoiceGenerator';
 import { sendBookingEmail, getEmailLogs, EmailLog } from '../../lib/emailService';
+import { signInUser } from '../../lib/authService';
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, 
   PieChart, Pie, Cell, AreaChart, Area, CartesianGrid 
@@ -12,13 +13,15 @@ import {
 import { 
   Plus, Trash2, Edit3, PlusCircle, MinusCircle, Download, 
   Mail, Car as CarIcon, DollarSign, Calendar, TrendingUp, 
-  AlertTriangle, CheckCircle, Clock, Shield, Search, RefreshCw, Eye 
+  AlertTriangle, CheckCircle, Clock, Shield, Search, RefreshCw, Eye, EyeOff, Lock, ArrowRight 
 } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface AdminDashboardProps {
   cars: Car[];
   bookings: Booking[];
+  currentUser?: UserProfile | null;
+  onAdminLoginSuccess?: (user: UserProfile) => void;
   onRefreshData: () => void;
   onOpenEmailPreview: (booking: Booking) => void;
   onCloseAdmin: () => void;
@@ -27,12 +30,131 @@ interface AdminDashboardProps {
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   cars,
   bookings,
+  currentUser,
+  onAdminLoginSuccess,
   onRefreshData,
   onOpenEmailPreview,
   onCloseAdmin,
 }) => {
+  // Gate authentication state
+  const [gatePassword, setGatePassword] = React.useState('');
+  const [gateShowPassword, setGateShowPassword] = React.useState(false);
+  const [gateLoading, setGateLoading] = React.useState(false);
+  const [gateError, setGateError] = React.useState<string | null>(null);
+
   const [activeTab, setActiveTab] = React.useState<'overview' | 'fleet' | 'bookings' | 'emails'>('overview');
   const [searchTerm, setSearchTerm] = React.useState('');
+
+  // Enforce Administrator Authentication Gate
+  const isAuthorizedAdmin = 
+    currentUser && 
+    currentUser.role === 'admin' && 
+    currentUser.email.toLowerCase() === 'wheels4rent@cyberforage.space';
+
+  if (!isAuthorizedAdmin) {
+    const handleGateSubmit = async (e: React.FormEvent) => {
+      e.preventDefault();
+      setGateError(null);
+      setGateLoading(true);
+      try {
+        const adminUser = await signInUser('wheels4rent@cyberforage.space', gatePassword);
+        onAdminLoginSuccess?.(adminUser);
+      } catch (err: any) {
+        setGateError(err.message || 'Invalid administrator password. Access denied.');
+      } finally {
+        setGateLoading(false);
+      }
+    };
+
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+        <div className="relative bg-slate-900 border border-brand-500/30 rounded-3xl max-w-md w-full overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-1 bg-gradient-to-r from-transparent via-brand-500 to-transparent" />
+          
+          <div className="p-6 text-center border-b border-slate-800 bg-slate-950/60">
+            <div className="w-16 h-16 mx-auto mb-3 rounded-2xl bg-brand-500/10 border border-brand-500/30 flex items-center justify-center text-brand-400">
+              <Shield className="w-8 h-8" />
+            </div>
+            <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-brand-500/10 text-brand-400 border border-brand-500/20">
+              Restricted Operations Area
+            </span>
+            <h2 className="text-xl font-bold text-white mt-3">Admin Password Required</h2>
+            <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">
+              Access to fleet management and financial analytics requires verified administrator authentication.
+            </p>
+          </div>
+
+          <div className="p-6">
+            {gateError && (
+              <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs flex items-start space-x-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{gateError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleGateSubmit} className="space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1.5">
+                  Admin Account
+                </label>
+                <input
+                  type="text"
+                  readOnly
+                  value="wheels4rent@cyberforage.space"
+                  className="w-full bg-slate-950/70 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-300 font-mono select-none cursor-not-allowed"
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-semibold text-slate-300">
+                    Administrator Password
+                  </label>
+                  <span className="text-[11px] text-slate-500">Required</span>
+                </div>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type={gateShowPassword ? 'text' : 'password'}
+                    required
+                    autoFocus
+                    value={gatePassword}
+                    onChange={(e) => setGatePassword(e.target.value)}
+                    placeholder="Enter administrator password"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-10 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-brand-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setGateShowPassword(!gateShowPassword)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                  >
+                    {gateShowPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={gateLoading}
+                className="w-full mt-2 py-3 rounded-xl bg-gradient-to-r from-brand-600 to-amber-500 hover:from-brand-500 hover:to-amber-400 text-white text-xs font-bold shadow-lg shadow-brand-500/25 flex items-center justify-center space-x-2 transition active:scale-98 disabled:opacity-50"
+              >
+                <span>{gateLoading ? 'Verifying Password...' : 'Verify Password & Unlock'}</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+
+              <button
+                type="button"
+                onClick={onCloseAdmin}
+                className="w-full py-2.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-white text-xs font-semibold transition"
+              >
+                Return to Customer Store
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
   
   // Modal states
   const [isAddCarOpen, setIsAddCarOpen] = React.useState(false);
