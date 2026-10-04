@@ -5,8 +5,8 @@ const connectionString = 'postgresql://postgres.gjtzgkgjigsilfnmccig:SurajChaudh
 async function cleanup() {
   const client = new Client({ connectionString, ssl: { rejectUnauthorized: false } });
   await client.connect();
-  await client.query("delete from auth.users where email like 'live_test_%@example.com'");
-  await client.query("delete from public.profiles where email like 'live_test_%@example.com'");
+  await client.query("delete from auth.users where email like 'test%' or email like 'live_test_%'");
+  await client.query("delete from public.profiles where email like 'test%' or email like 'live_test_%'");
   console.log('Cleanup complete.');
   await client.end();
 }
