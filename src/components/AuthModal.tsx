@@ -165,21 +165,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  // Quick Customer Demo Shortcut
-  const handleQuickCustomerLogin = async () => {
-    setError(null);
-    setLoading(true);
-    try {
-      const user = await signInUser('customer@example.com', 'customer123');
-      onSuccess(user);
-      onClose();
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5">
       <div className="relative bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200">
@@ -603,23 +588,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               )}
             </form>
           )}
-
-          {/* Quick Demo Credentials Footer */}
-          <div className="pt-4 border-t border-slate-800">
-            <div className="flex items-center justify-between">
-              <button
-                type="button"
-                onClick={handleQuickCustomerLogin}
-                className="w-full py-2 px-3 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-700 text-slate-300 text-xs font-bold transition flex items-center justify-center space-x-1.5"
-              >
-                <User className="w-3.5 h-3.5" />
-                <span>Test Customer 1-Click Login</span>
-              </button>
-            </div>
-            <p className="text-[10px] text-slate-500 text-center mt-2.5">
-              Admin Portal access requires password authentication for <span className="text-slate-300 font-mono">wheels4rent@cyberforage.space</span>
-            </p>
-          </div>
 
         </div>
 

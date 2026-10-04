@@ -14,7 +14,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
   onClose,
   onSuccess,
 }) => {
-  const [email, setEmail] = React.useState('wheels4rent@cyberforage.space');
+  const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [showPassword, setShowPassword] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
@@ -28,7 +28,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
     setLoading(true);
 
     try {
-      const user = await signInUser(email, password);
+      const user = await signInUser(email.trim(), password);
       if (user.role !== 'admin') {
         throw new Error('This account does not have administrator privileges.');
       }
@@ -92,7 +92,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-brand-500"
-                placeholder="wheels4rent@cyberforage.space"
+                placeholder="Enter administrator email"
               />
             </div>
 

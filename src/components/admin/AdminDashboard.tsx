@@ -37,6 +37,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onCloseAdmin,
 }) => {
   // Gate authentication state
+  const [gateEmail, setGateEmail] = React.useState('');
   const [gatePassword, setGatePassword] = React.useState('');
   const [gateShowPassword, setGateShowPassword] = React.useState(false);
   const [gateLoading, setGateLoading] = React.useState(false);
@@ -57,10 +58,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setGateError(null);
       setGateLoading(true);
       try {
-        const adminUser = await signInUser('wheels4rent@cyberforage.space', gatePassword);
+        const adminUser = await signInUser(gateEmail.trim(), gatePassword);
+        if (adminUser.role !== 'admin') {
+          throw new Error('This account does not have administrator privileges.');
+        }
         onAdminLoginSuccess?.(adminUser);
       } catch (err: any) {
-        setGateError(err.message || 'Invalid administrator password. Access denied.');
+        setGateError(err.message || 'Invalid administrator credentials. Access denied.');
       } finally {
         setGateLoading(false);
       }
@@ -95,13 +99,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <form onSubmit={handleGateSubmit} className="space-y-4">
               <div>
                 <label className="text-xs font-semibold text-slate-300 block mb-1.5">
-                  Admin Account
+                  Administrator Email
                 </label>
                 <input
-                  type="text"
-                  readOnly
-                  value="wheels4rent@cyberforage.space"
-                  className="w-full bg-slate-950/70 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-300 font-mono select-none cursor-not-allowed"
+                  type="email"
+                  required
+                  value={gateEmail}
+                  onChange={(e) => setGateEmail(e.target.value)}
+                  placeholder="Enter administrator email"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-brand-500"
                 />
               </div>
 
