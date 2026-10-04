@@ -129,29 +129,36 @@ export async function sendBookingEmail(booking: Booking, customRecipient?: strin
   const recipient = customRecipient || booking.customer_email;
   const htmlContent = generateBookingEmailHtml(booking);
   const subject = `Booking Confirmed: ${booking.car_brand} ${booking.car_name} [INV-${booking.booking_number}]`;
-  const sender = 'wheels4rent@cyberforage.space';
 
-  // 1. If Supabase Edge Function is deployed, try invoking it
-  if (isSupabaseConfigured && supabase) {
-    try {
-      const { data, error } = await supabase.functions.invoke('send-booking-invoice', {
-        body: {
-          booking,
-          recipient,
-          sender,
-          subject,
-          html: htmlContent
-        }
-      });
-      if (!error) {
-        console.log('Supabase Edge function email sent:', data);
-      }
-    } catch (e) {
-      console.info('Supabase Edge function invoke fallback (Edge function not deployed yet, continuing with mailer logging):', e);
+  let deliveryStatus: 'delivered' | 'sent' | 'failed' = 'sent';
+
+  // 1. Dispatch real transactional email via backend invoice API
+  try {
+    const res = await fetch('/api/send-booking-invoice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        booking,
+        recipientEmail: recipient,
+        html: htmlContent,
+        subject,
+      }),
+    });
+
+    if (res.ok) {
+      deliveryStatus = 'delivered';
+      console.log(`[Email Service] Invoice successfully sent to ${recipient}`);
+    } else {
+      const errData = await res.json().catch(() => ({}));
+      console.warn('[Email Service] Invoice API returned non-OK status:', errData.error || res.statusText);
+      deliveryStatus = 'failed';
     }
+  } catch (err: any) {
+    console.warn('[Email Service] Network error dispatching invoice email:', err.message);
+    deliveryStatus = 'failed';
   }
 
-  // 2. Mark booking as emailed
+  // 2. Mark booking as emailed in database / storage
   await markBookingEmailSent(booking.id);
 
   // 3. Record in Email Logs
@@ -163,8 +170,8 @@ export async function sendBookingEmail(booking: Booking, customRecipient?: strin
     customer_name: booking.customer_name,
     subject,
     sent_at: new Date().toISOString(),
-    status: 'delivered',
-    provider: isSupabaseConfigured ? 'Supabase Edge Functions' : 'Wheels4Rent Dispatcher',
+    status: deliveryStatus,
+    provider: 'Wheels4Rent Dispatcher',
     html_preview: htmlContent,
   };
 

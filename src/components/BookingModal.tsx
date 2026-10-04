@@ -533,9 +533,9 @@ export const BookingModal: React.FC<BookingModalProps> = ({
               </div>
               <div className="flex-1">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs font-bold text-white">Supabase Mail Delivery</p>
+                  <p className="text-xs font-bold text-white">Email Invoice Dispatch</p>
                   <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">
-                    Delivered
+                    Dispatched
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-400 mt-0.5">

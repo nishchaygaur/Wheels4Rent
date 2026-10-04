@@ -18,32 +18,114 @@ const pool = new Pool({
   idleTimeoutMillis: 30000,
 });
 
-// Background email dispatcher (non-blocking, protects against SMTP timeout)
+// Background email dispatcher (supports Resend API & SMTP)
 const smtpTransporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'smtp.zoho.in',
-  port: parseInt(process.env.SMTP_PORT || '465', 10),
-  secure: true,
+  port: parseInt(process.env.SMTP_PORT || '587', 10),
+  secure: (process.env.SMTP_PORT === '465'),
   auth: {
     user: process.env.SMTP_USER || 'wheels4rent@cyberforage.space',
     pass: process.env.SMTP_PASS || process.env.ZOHO_APP_PASSWORD || 'Suraj@5141',
   },
-  connectionTimeout: 4000,
-  greetingTimeout: 4000,
-  socketTimeout: 4000,
+  connectionTimeout: 5000,
+  greetingTimeout: 5000,
+  socketTimeout: 5000,
 });
 
-function dispatchEmailAsync(to, subject, text, html) {
-  smtpTransporter.sendMail({
+async function sendGenericEmail({ to, subject, text, html }) {
+  // 1. If RESEND_API_KEY is configured, prioritize fast HTTPS API
+  if (process.env.RESEND_API_KEY) {
+    try {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: process.env.SENDER_EMAIL || `Wheels4Rent <${process.env.SMTP_USER || 'wheels4rent@cyberforage.space'}>`,
+          to: [to],
+          subject,
+          html: html || `<p>${text}</p>`,
+          text,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        console.log(`[Resend Email Sent] Successfully delivered to ${to} (${data.id})`);
+        return { provider: 'resend', id: data.id };
+      }
+      console.warn(`[Resend Error Response]:`, data);
+    } catch (e) {
+      console.warn(`[Resend Exception]:`, e.message);
+    }
+  }
+
+  // 2. Fall back to SMTP Transporter
+  const info = await smtpTransporter.sendMail({
     from: `"Wheels4Rent" <${process.env.SMTP_USER || 'wheels4rent@cyberforage.space'}>`,
     to,
     subject,
-    text,
+    text: text || 'Please view your booking invoice in an HTML compatible email viewer.',
     html: html || `<p>${text}</p>`,
-  }).then(() => {
-    console.log(`[SMTP] Dispatched email to ${to}`);
-  }).catch((err) => {
-    console.warn(`[SMTP Dispatch Note] Could not send to ${to}: ${err.message}. OTP code is recorded in database.`);
   });
+  console.log(`[SMTP Email Sent] Dispatched to ${to}: ${info.messageId}`);
+  return { provider: 'smtp', id: info.messageId };
+}
+
+function dispatchEmailAsync(to, subject, text, html) {
+  sendGenericEmail({ to, subject, text, html }).catch((err) => {
+    console.warn(`[Email Dispatch Note] Could not send to ${to}: ${err.message}`);
+  });
+}
+
+function buildBookingInvoiceHtml(b) {
+  const total = Number(b.total_amount || 0).toLocaleString('en-IN');
+  const subtotal = Number(b.subtotal || 0).toLocaleString('en-IN');
+  const tax = Number(b.tax_amount || 0).toLocaleString('en-IN');
+  const deposit = Number(b.deposit_amount || 0).toLocaleString('en-IN');
+  const pickup = b.pickup_date ? new Date(b.pickup_date).toLocaleString('en-IN') : 'Confirmed Date';
+  const retDate = b.return_date ? new Date(b.return_date).toLocaleString('en-IN') : 'Confirmed Date';
+
+  return `
+    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background-color:#0f172a;color:#f8fafc;padding:24px;">
+      <div style="max-width:620px;margin:0 auto;background-color:#1e293b;border-radius:16px;overflow:hidden;border:1px solid #334155;">
+        <div style="background:linear-gradient(135deg,#ea580c 0%,#c2410c 100%);padding:28px 24px;text-align:center;">
+          <h1 style="margin:0;color:#fff;font-size:24px;letter-spacing:1px;">WHEELS 4 RENT</h1>
+          <p style="margin:6px 0 0;color:#fed7aa;font-size:14px;">Booking Confirmed &amp; Verified Tax Invoice</p>
+          <div style="display:inline-block;background:rgba(255,255,255,0.2);padding:4px 14px;border-radius:9999px;font-size:12px;font-weight:bold;margin-top:10px;color:#fff;">
+            BOOKING #${b.booking_number}
+          </div>
+        </div>
+        <div style="padding:24px;">
+          <p style="margin:0 0 16px;font-size:15px;">Hello <strong>${b.customer_name || 'Valued Customer'}</strong>,</p>
+          <p style="color:#cbd5e1;font-size:14px;line-height:1.6;margin:0 0 20px;">
+            Your self-drive rental reservation is confirmed! Your official digital Tax Invoice is detailed below.
+          </p>
+          <div style="background:#0f172a;border-radius:12px;padding:16px;margin-bottom:20px;border:1px solid #334155;">
+            <h3 style="margin:0 0 4px;font-size:18px;color:#fff;">${b.car_brand} ${b.car_name}</h3>
+            <p style="margin:0;color:#94a3b8;font-size:13px;">Total Days: ${b.total_days} | Pickup Location: ${b.pickup_location}</p>
+          </div>
+          <table style="width:100%;border-collapse:collapse;margin-bottom:20px;font-size:14px;">
+            <tr style="border-bottom:1px solid #334155;"><td style="padding:10px 0;color:#94a3b8;">Pickup Date:</td><td style="padding:10px 0;text-align:right;color:#fff;font-weight:600;">${pickup}</td></tr>
+            <tr style="border-bottom:1px solid #334155;"><td style="padding:10px 0;color:#94a3b8;">Return Date:</td><td style="padding:10px 0;text-align:right;color:#fff;font-weight:600;">${retDate}</td></tr>
+            <tr style="border-bottom:1px solid #334155;"><td style="padding:10px 0;color:#94a3b8;">Base Rental:</td><td style="padding:10px 0;text-align:right;color:#fff;font-weight:600;">INR ${subtotal}</td></tr>
+            <tr style="border-bottom:1px solid #334155;"><td style="padding:10px 0;color:#94a3b8;">GST (18%):</td><td style="padding:10px 0;text-align:right;color:#fff;font-weight:600;">INR ${tax}</td></tr>
+            <tr style="border-bottom:1px solid #334155;"><td style="padding:10px 0;color:#94a3b8;">Security Deposit:</td><td style="padding:10px 0;text-align:right;color:#fff;font-weight:600;">INR ${deposit}</td></tr>
+            <tr><td style="padding:14px 0 0;color:#f97316;font-size:16px;font-weight:bold;">Grand Total:</td><td style="padding:14px 0 0;text-align:right;color:#f97316;font-size:18px;font-weight:bold;">INR ${total}</td></tr>
+          </table>
+          <div style="background:#0f172a;padding:12px;border-radius:8px;border-left:4px solid #f97316;margin-bottom:16px;">
+            <p style="margin:0;font-size:12px;color:#cbd5e1;">
+              <strong>Pickup Verification:</strong> Please bring your original Driving License (${b.customer_dl || 'Provided'}) &amp; Govt ID upon vehicle pickup.
+            </p>
+          </div>
+          <p style="font-size:12px;color:#94a3b8;text-align:center;margin:0;">
+            24/7 Helpline: <strong>+91-9758925637</strong> | Email: <strong>wheels4rent@cyberforage.space</strong>
+          </p>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 app.use(cors());
@@ -231,11 +313,22 @@ app.post('/api/bookings', async (req, res) => {
       b.booking_status || 'confirmed', true, new Date().toISOString()
     ];
     const result = await pool.query(query, values);
+    const createdBooking = mapBooking(result.rows[0]);
 
     // Decrement available quantity in database
     await pool.query('SELECT public.decrement_car_quantity($1)', [b.car_id]);
 
-    res.status(201).json(mapBooking(result.rows[0]));
+    // Asynchronously dispatch booking confirmation & verified tax invoice email
+    if (b.customer_email) {
+      dispatchEmailAsync(
+        b.customer_email,
+        `Booking Confirmed & Tax Invoice: ${b.car_brand} ${b.car_name} [INV-${b.booking_number}]`,
+        `Your reservation #${b.booking_number} for ${b.car_brand} ${b.car_name} is confirmed. Total: INR ${b.total_amount}.`,
+        buildBookingInvoiceHtml(b)
+      );
+    }
+
+    res.status(201).json(createdBooking);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -260,6 +353,36 @@ app.put('/api/bookings/:id/status', async (req, res) => {
     res.json(mapBooking(result.rows[0]));
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Explicit invoice email dispatcher endpoint (called by frontend or admin resend)
+app.post('/api/send-booking-invoice', async (req, res) => {
+  const { booking, recipientEmail, html: customHtml, subject: customSubject } = req.body;
+  if (!booking) {
+    return res.status(400).json({ error: 'Booking details are required' });
+  }
+
+  const to = recipientEmail || booking.customer_email;
+  if (!to) {
+    return res.status(400).json({ error: 'Recipient email is required' });
+  }
+
+  const subject = customSubject || `Booking Confirmed & Tax Invoice: ${booking.car_brand} ${booking.car_name} [INV-${booking.booking_number}]`;
+  const html = customHtml || buildBookingInvoiceHtml(booking);
+
+  try {
+    const result = await sendGenericEmail({ to, subject, html });
+    if (booking.id) {
+      await pool.query('UPDATE public.bookings SET email_sent = true, email_sent_at = NOW() WHERE id = $1', [booking.id]).catch(() => {});
+    }
+    res.json({ success: true, message: `Invoice successfully dispatched to ${to}`, result });
+  } catch (err) {
+    console.error(`Invoice email failure for ${to}:`, err.message);
+    res.status(500).json({
+      error: `Invoice delivery failed: ${err.message}`,
+      hint: 'Configure ZOHO_APP_PASSWORD or RESEND_API_KEY in environment variables.'
+    });
   }
 });
 
